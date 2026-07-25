@@ -14,7 +14,7 @@ GuardScan pairs deterministic Solidity detectors with grounded LLM explanations 
 
 ---
 
-## 1. Executive Summary
+## 1. Summary
 
 This repository is the home of **GuardScan**, an AI-assisted smart contract vulnerability scanner. The system combines:
 
@@ -25,7 +25,38 @@ GuardScan targets the practical gap between noisy expert static-analysis output 
 
 ---
 
-## 2. Problem Statement
+## 2. Background: Key Concepts for Beginners
+
+This section defines the main terms used in the proposal so readers new to blockchain security can follow along.
+
+| Term | Plain-English meaning |
+|---|---|
+| **Blockchain** | A shared, append-only ledger. Once data is confirmed, it is very hard to change, which is why deployed bugs are costly. |
+| **Smart contract** | A program stored on a blockchain (commonly Ethereum) that automatically enforces rules for money, tokens, or other on-chain state. |
+| **Solidity** | The most common programming language for writing Ethereum smart contracts. GuardScan scans Solidity source files. |
+| **EVM** | The Ethereum Virtual Machine — the runtime that executes smart-contract bytecode on Ethereum-compatible chains. |
+| **Transaction** | A signed action that calls a contract or moves value. Failed security assumptions here can move real funds. |
+| **Token / ERC-20** | A common standard for fungible tokens (coin-like balances) on Ethereum. Many DeFi apps move ERC-20 tokens. |
+| **AMM (Automated Market Maker)** | A smart-contract style exchange that prices trades from a liquidity pool formula instead of an order book (for example, Uniswap-style pools). |
+| **Liquidity pool** | Token reserves locked in a contract so users can swap one asset for another. |
+| **Immutability** | After deployment, contract code usually cannot be patched like a normal web app. Fixes often require a new deployment and migration. |
+| **Vulnerability / exploit** | A weakness an attacker can use to steal funds, freeze assets, or take unauthorized control. |
+| **Reentrancy** | A bug pattern where an external call lets an attacker re-enter a function before state is updated, often draining funds. |
+| **Access control** | Rules for who may call sensitive functions (for example, only an owner may change critical settings). |
+| **`tx.origin` vs `msg.sender`** | `msg.sender` is the immediate caller; `tx.origin` is the original externally owned account. Using `tx.origin` for authorization is a known anti-pattern. |
+| **Slippage / `minOut`** | In a swap, price can move before the trade settles. A minimum-output (`minOut`) check protects users from getting far less than expected. |
+| **Static analysis** | Checking source code with rules/heuristics without executing a full live attack. Tools like Slither do this; GuardScan’s detectors are a small educational version of that idea. |
+| **Detector** | A deterministic check that flags a specific pattern and returns structured evidence (file/line/snippet). In GuardScan, detectors are the source of truth. |
+| **LLM (Large Language Model)** | An AI model that can explain text/code in natural language. Useful for readability, but unsafe if allowed to invent vulnerabilities freely. |
+| **Grounded explanation** | An LLM response constrained to evidence already produced by detectors — explain and suggest fixes, do not invent new findings. |
+| **Severity** | A priority label for findings (for example Critical / High / Medium / Info) so developers fix the riskiest issues first. |
+| **Audit** | A security review of a contract. GuardScan is not a replacement for a professional audit; it is a developer feedback tool. |
+
+**How these pieces fit GuardScan:** Solidity smart contracts (often AMM / ERC-20 related) can contain high-impact bugs. Deterministic detectors find candidate issues; a grounded LLM explains them in plain English so beginners and busy developers can act on the results more quickly.
+
+---
+
+## 3. Problem Statement
 
 Smart contracts are immutable after deployment. Bugs such as reentrancy, missing access control, unsafe external calls, and broken automated market maker (AMM) invariants can cause irreversible loss of funds.
 
@@ -37,7 +68,7 @@ Manual audits remain valuable, but they are slow, expensive, and difficult to ru
 
 ---
 
-## 3. Why This Problem Matters
+## 4. Why This Problem Matters
 
 1. **Real economic impact.** DeFi and token contracts secure substantial value. Historical exploits show that small coding mistakes can become catastrophic losses.
 2. **Applied security skill.** Turning Solidity, AMM, and EVM security concepts into a working tool demonstrates applied mastery beyond conceptual understanding.
@@ -46,16 +77,16 @@ Manual audits remain valuable, but they are slow, expensive, and difficult to ru
 
 ---
 
-## 4. Related Work
+## 5. Related Work
 
-### 4.1 Academic papers and research lines
+### 5.1 Academic papers and research lines
 
 - **Oyente** — early symbolic execution research for Ethereum smart contracts
 - **Securify** — semantic / compliance-pattern analysis approaches for Solidity
 - **GPTScan (ICSE 2024)** and related LLM-for-vulnerability detection research — combine LLMs with program analysis and document false-positive / hallucination challenges
 - **Vulnerability taxonomies and guidance:** SWC Registry, DASP Top 10, Consensys Smart Contract Best Practices
 
-### 4.2 Open-source and industry systems
+### 5.2 Open-source and industry systems
 
 - **Slither (Trail of Bits)** — widely used static analysis with practical detectors
 - **Mythril** — symbolic-execution-oriented analysis
@@ -63,19 +94,19 @@ Manual audits remain valuable, but they are slow, expensive, and difficult to ru
 - **OpenZeppelin Contracts** — secure building blocks that reduce common implementation risk
 - **Professional audit report corpora** — qualitative reference for how findings are written, ranked, and explained
 
-### 4.3 Gap this project targets
+### 5.3 Gap this project targets
 
 Most mature tools optimize for expert auditors. GuardScan optimizes for a **developer-facing loop**: structured detection first, then LLM explanation constrained to that evidence. The novelty is not “replace Slither,” but **usable, grounded explanation and prioritization** for educational and early-development workflows, with AMM-relevant checks tied to real contracts.
 
 ---
 
-## 5. Proposed Solution
+## 6. Proposed Solution
 
-### 5.1 Product concept
+### 6.1 Product concept
 
 **GuardScan** is a minimal AI-assisted Solidity vulnerability scanner. Initial scope focuses on patterns relevant to AMM / ERC-20 style contracts, using a SimpleAMM implementation and intentionally vulnerable variants as primary targets.
 
-### 5.2 System architecture
+### 6.2 System architecture
 
 ```text
 Solidity source
@@ -88,7 +119,7 @@ Solidity source
      CLI + simple Web UI report
 ```
 
-### 5.3 Core capabilities
+### 6.3 Core capabilities
 
 1. Accept Solidity file(s) or pasted source
 2. Run a focused detector set (start with 4–6 rules), including:
@@ -100,7 +131,7 @@ Solidity source
 3. Emit severity-ranked findings: `Critical` / `High` / `Medium` / `Info`
 4. Use an LLM only to explain findings and propose fixes, following a guardrail philosophy similar to constrained Text-to-SQL systems (structured constraints; refuse unsupported claims)
 
-### 5.4 Explicit mocks (scope control for the ≤5-hour prototype)
+### 6.4 Explicit mocks (scope control for the ≤5-hour prototype)
 
 | Component | MVP treatment |
 |---|---|
@@ -109,7 +140,7 @@ Solidity source
 | Broad multi-chain support | Solidity local files only |
 | Complete production Slither integration | Optional; may stub JSON findings |
 
-### 5.5 Reuse from prior coursework
+### 6.5 Reuse from prior coursework
 
 | Prior work | Reuse in GuardScan |
 |---|---|
@@ -119,13 +150,13 @@ Solidity source
 
 ---
 
-## 6. Minimal Working Example (Maximum 5 Hours)
+## 7. Minimal Working Example (Maximum 5 Hours)
 
-### 6.1 Objective
+### 7.1 Objective
 
 Demonstrate an end-to-end working path quickly, even if analysis depth is intentionally shallow.
 
-### 6.2 Five-hour build plan
+### 7.2 Five-hour build plan
 
 | Hour | Deliverable |
 |---|---|
@@ -135,7 +166,7 @@ Demonstrate an end-to-end working path quickly, even if analysis depth is intent
 | 4 | Add minimal Streamlit or HTML UI: paste code → render report |
 | 5 | Write usage docs, capture screenshots, prepare one scripted demo run |
 
-### 6.3 Prototype success criteria
+### 7.3 Prototype success criteria
 
 1. Paste code and receive a report in approximately 30 seconds
 2. Detect at least one true positive on a known-bad fixture
@@ -143,7 +174,7 @@ Demonstrate an end-to-end working path quickly, even if analysis depth is intent
 
 ---
 
-## 7. Weekly Plan
+## 8. Weekly Plan
 
 | Milestone | Target | Deliverable |
 |---|---|---|
@@ -160,7 +191,7 @@ Demonstrate an end-to-end working path quickly, even if analysis depth is intent
 
 ---
 
-## 8. Risks and Mitigations
+## 9. Risks and Mitigations
 
 | Risk | Mitigation |
 |---|---|
@@ -171,7 +202,7 @@ Demonstrate an end-to-end working path quickly, even if analysis depth is intent
 
 ---
 
-## 9. Definition of Done
+## 10. Definition of Done
 
 A usable local or web-accessible system that:
 
@@ -183,9 +214,9 @@ A usable local or web-accessible system that:
 
 ---
 
-## 10. Prototype Usage (≤5-Hour MVP)
+## 11. Prototype Usage (≤5-Hour MVP)
 
-### 10.1 Layout
+### 11.1 Layout
 
 ```text
 guardscan/
@@ -199,7 +230,7 @@ guardscan/
   .env.example
 ```
 
-### 10.2 Setup
+### 11.2 Setup
 
 ```bash
 python -m venv .venv
@@ -213,7 +244,7 @@ copy .env.example .env   # or: cp .env.example .env
 # Optional: set OPENROUTER_API_KEY in .env for live grounded explanations
 ```
 
-### 10.3 CLI scan (JSON)
+### 11.3 CLI scan (JSON)
 
 ```bash
 # Detectors + mock/live explanation
@@ -226,7 +257,7 @@ python cli.py fixtures/VulnerableAMM.sol --no-explain --pretty
 python cli.py fixtures/SaferAMM.sol --pretty --mock-llm
 ```
 
-### 10.4 Streamlit UI
+### 11.4 Streamlit UI
 
 ```bash
 streamlit run ui/app.py
@@ -234,13 +265,13 @@ streamlit run ui/app.py
 
 Paste Solidity or load a fixture, then click **Scan**. Without `OPENROUTER_API_KEY`, explanations run in mock mode (still grounded only to detector findings).
 
-### 10.5 Tests
+### 11.5 Tests
 
 ```bash
 pytest -q
 ```
 
-### 10.6 Prototype limitations (intentional)
+### 11.6 Prototype limitations (intentional)
 
 - Heuristic detectors (not full Slither / symbolic execution)
 - Source-first only (no bytecode-only scanning)
@@ -249,7 +280,7 @@ pytest -q
 
 ---
 
-## 11. Related Repositories
+## 12. Related Repositories
 
 - [automated-market-maker](https://github.com/raghavendraprasath/automated-market-maker) — SimpleAMM smart contract (scan target)
 - [ai-generated-block-explorer](https://github.com/raghavendraprasath/ai-generated-block-explorer) — Bitcoin Text-to-SQL / LLM tooling patterns reused here
