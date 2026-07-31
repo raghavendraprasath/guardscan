@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import streamlit as st
 from dotenv import load_dotenv
 
-from src.scanner import scan_source
+ROOT = Path(__file__).resolve().parents[1]
+# Streamlit puts this script's folder on sys.path, not the repo root.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.scanner import scan_source  # noqa: E402
 
 load_dotenv()
 
-ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "fixtures"
 
 st.set_page_config(page_title="GuardScan", layout="wide")
