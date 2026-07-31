@@ -9,7 +9,7 @@ GuardScan pairs deterministic Solidity detectors with grounded LLM explanations 
 | **Author** | Raghavendra Prasath Sridhar |
 | **Course** | INFO7500 — Cryptocurrency and Smart Contracts (Summer 2026) |
 | **Area** | Blockchain Security |
-| **Status** | Final project proposal + working ≤5-hour MVP prototype |
+| **Status** | Jul 31 progress update — working prototype: 8 detectors, CLI + Streamlit UI, grounded AI explanations |
 | **Repository** | [github.com/raghavendraprasath/guardscan](https://github.com/raghavendraprasath/guardscan) |
 
 ---
@@ -122,12 +122,15 @@ Solidity source
 ### 6.3 Core capabilities
 
 1. Accept Solidity file(s) or pasted source
-2. Run a focused detector set (start with 4–6 rules), including:
-   - missing access control on sensitive functions
+2. Run a focused detector set (currently 8 rules):
+   - missing access control on sensitive functions (exact names at `Critical`, name heuristics at `High`)
    - external call before state update (reentrancy heuristic)
    - swap without slippage protection (`minOut` or equivalent)
    - unsafe ERC-20 transfer / allowance patterns (simplified)
    - `tx.origin` authentication anti-pattern
+   - `delegatecall` into caller-influenced targets
+   - `selfdestruct` reachable without an authorization check
+   - randomness derived from manipulable block data
 3. Emit severity-ranked findings: `Critical` / `High` / `Medium` / `Info`
 4. Use an LLM only to explain findings and propose fixes, following a guardrail philosophy similar to constrained Text-to-SQL systems (structured constraints; refuse unsupported claims)
 
@@ -182,6 +185,16 @@ Demonstrate an end-to-end working path quickly, even if analysis depth is intent
 | **Progress update** | Jul 31 | 5–10 minute progress presentation: expanded detectors, finding schema, false-positive notes, live scan demo |
 | **Parallel coursework** | Jul 31 | SimpleAMM Web3 UI (separate assignment); AMM remains GuardScan’s primary scan target |
 | **Final delivery** | Aug 7 | Usable GuardScan system: CLI/UI, detector set, small labeled evaluation suite, README with limitations & related work, final presentation |
+
+### Delivered as of Jul 31 (progress update)
+
+| Proposal commitment | Status |
+|---|---|
+| Expand detectors | 5 → 8: added `delegatecall`, unprotected `selfdestruct`, block-derived randomness |
+| Harden finding schema | Explanations carry `explanation_mode` (`ai` / `template` / `none`) plus `template_reason`, so the provenance of every sentence is machine-readable |
+| Document false-positive notes | Access control widened from 9 hardcoded names to name prefixes, reported at `High` instead of `Critical` to reflect weaker evidence; `onlyX` modifiers, inline `msg.sender` checks, and `view`/`pure` functions suppressed as guards |
+| Live scan demo | CLI and Streamlit both run end-to-end; explanations degrade to template text on rate limit or network loss instead of failing |
+| Regression coverage | 6 tests, including a control asserting a well-guarded contract yields zero findings |
 
 ### Intended weekly accomplishments
 
@@ -247,15 +260,22 @@ copy .env.example .env   # or: cp .env.example .env
 ### 11.3 CLI scan (JSON)
 
 ```bash
-# Detectors + mock/live explanation
-python cli.py fixtures/VulnerableVault.sol --pretty --mock-llm
+# Detectors + AI explanation (needs OPENROUTER_API_KEY)
+python cli.py fixtures/VulnerableVault.sol --pretty
+
+# Detectors + template explanation, no model call
+python cli.py fixtures/VulnerableVault.sol --pretty --no-ai
 
 # Detectors only
 python cli.py fixtures/VulnerableAMM.sol --no-explain --pretty
 
 # Safer contrast fixture
-python cli.py fixtures/SaferAMM.sol --pretty --mock-llm
+python cli.py fixtures/SaferAMM.sol --pretty --no-ai
 ```
+
+Each report carries an `explanation.explanation_mode` of `ai`, `template`, or `none`, so the
+provenance of every explanation is explicit in the JSON. When the mode is `template`,
+`explanation.template_reason` records why the model was not used.
 
 ### 11.4 Streamlit UI
 
@@ -263,7 +283,15 @@ python cli.py fixtures/SaferAMM.sol --pretty --mock-llm
 streamlit run ui/app.py
 ```
 
-Paste Solidity or load a fixture, then click **Scan**. Without `OPENROUTER_API_KEY`, explanations run in mock mode (still grounded only to detector findings).
+Paste Solidity or pick an example contract, then click **Scan**. The UI offers one control,
+**Explain findings with AI**:
+
+- **On** — findings go to the model, which writes risk and fix guidance for each one.
+- **Off** — the same detector findings with no explanation layer, which demonstrates that the
+  detectors, not the model, are what produce findings.
+
+If the model cannot be reached (missing key, rate limit, no network), the explanation degrades to
+built-in template text and says so, rather than failing the scan.
 
 ### 11.5 Tests
 
@@ -277,6 +305,12 @@ pytest -q
 - Source-first only (no bytecode-only scanning)
 - LLM must explain listed findings only; it does not invent new issues
 - Fixtures are educational demos — do not deploy them
+- **Zero findings is not a safety claim.** GuardScan only reports the 8 patterns above.
+  Bug classes it has no detector for (integer-overflow edge cases, signature replay,
+  oracle manipulation, gas griefing, upgrade-storage collisions, and many more) are
+  never examined, so a clean report means "none of these 8 patterns matched" and
+  nothing stronger. Detectors are also name- and shape-sensitive: an unguarded setter
+  called something unlike the patterns above can be missed.
 
 ---
 

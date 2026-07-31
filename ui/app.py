@@ -13,24 +13,27 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from src.detectors import DETECTORS  # noqa: E402
 from src.scanner import scan_source  # noqa: E402
 
 load_dotenv()
 
 FIXTURES = ROOT / "fixtures"
+DETECTOR_COUNT = len(DETECTORS)
 
 st.set_page_config(page_title="GuardScan", layout="wide")
 st.title("GuardScan")
 st.caption(
-    "Deterministic Solidity detectors + grounded LLM explanations. "
-    "The LLM explains only detector findings — it does not invent new issues."
+    f"{DETECTOR_COUNT} deterministic Solidity detectors, with grounded AI explanations. "
+    "The model explains only what the detectors report — it does not invent new issues, "
+    "and issues outside these detectors are not checked."
 )
 
 EXAMPLE_CONTRACTS: dict[str, str | None] = {
     "Paste my own code": None,
     "Vulnerable vault — unsafe withdrawals & ownership": "VulnerableVault.sol",
     "Vulnerable AMM — unsafe token swap": "VulnerableAMM.sol",
-    "Hardened AMM — same swap, issues fixed": "SaferAMM.sol",
+    "Hardened AMM — same swap, flagged issues fixed": "SaferAMM.sol",
 }
 
 choice = st.selectbox(
@@ -42,11 +45,19 @@ example = EXAMPLE_CONTRACTS[choice]
 initial = (FIXTURES / example).read_text(encoding="utf-8") if example else ""
 
 source = st.text_area("Solidity source", value=initial, height=360)
-col1, col2 = st.columns(2)
-with col1:
-    explain = st.checkbox("Include grounded explanation", value=True)
-with col2:
-    mock_llm = st.checkbox("Force mock LLM (no API call)", value=False)
+
+explain = st.toggle(
+    "Explain findings with AI",
+    value=True,
+    help="The AI never finds issues on its own — it only explains what the detectors report.",
+)
+st.caption(
+    "On: each finding is sent to a language model for plain-English risk and fix guidance "
+    "(takes a few seconds). Off: the same detector findings, with no explanation layer."
+    if explain
+    else "Off: raw detector findings only, instantly. Turn this on to have a language model "
+    "explain the same findings — it cannot add new ones."
+)
 
 if st.button("Scan", type="primary"):
     if not source.strip():
@@ -56,11 +67,23 @@ if st.button("Scan", type="primary"):
             source,
             file_label=example or "<pasted source>",
             explain=explain,
-            use_mock_llm=True if mock_llm else None,
         )
+        explanation = report.get("explanation") or {}
+        # Template mode attaches per-finding text; AI mode returns one combined narrative.
+        per_finding = {
+            f["id"]: f["explanation"]
+            for f in explanation.get("findings", [])
+            if f.get("explanation")
+        }
+
         st.subheader(f"Findings ({report['finding_count']})")
         if report["finding_count"] == 0:
-            st.success("No detector findings. GuardScan will not invent vulnerabilities.")
+            st.info(
+                f"**Nothing matched GuardScan's {DETECTOR_COUNT} detectors.** "
+                "That means none of the specific patterns it checks for are present — "
+                "it is not a proof that this contract is safe. Bug classes outside those "
+                "detectors are not examined, and GuardScan never invents findings to fill the gap."
+            )
         else:
             for finding in report["findings"]:
                 st.markdown(
@@ -69,12 +92,24 @@ if st.button("Scan", type="primary"):
                     f"Evidence: `{finding['evidence']}`  \n"
                     f"Recommendation: {finding['recommendation']}"
                 )
+                if finding["id"] in per_finding:
+                    st.info(per_finding[finding["id"]])
                 st.divider()
 
-        if explain and "explanation" in report:
-            st.subheader("Grounded explanation")
-            st.info(f"LLM mode: `{report['explanation'].get('llm_mode')}`")
-            st.write(report["explanation"].get("summary", ""))
+        mode = explanation.get("explanation_mode")
+        # With zero findings there is nothing to explain; the success note above says it all.
+        if explain and mode and mode != "none":
+            if mode == "template":
+                st.subheader("Template explanation")
+                st.warning(
+                    f"AI explanation unavailable ({explanation.get('template_reason')}). "
+                    "Showing built-in template text instead — the findings above are unchanged."
+                )
+            else:
+                st.subheader("AI explanation")
+                if explanation.get("model"):
+                    st.caption(f"Model: `{explanation['model']}`")
+                st.write(explanation.get("summary", ""))
 
         with st.expander("Raw JSON report"):
             st.json(report)

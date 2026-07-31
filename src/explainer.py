@@ -21,17 +21,30 @@ HARD RULES:
 """
 
 
-def _mock_explanations(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _template_result(findings: list[dict[str, Any]], reason: str) -> dict[str, Any]:
+    return {
+        "summary": (
+            f"Explained {len(findings)} finding(s) from a fixed sentence template "
+            f"({reason}). No language model was called."
+        ),
+        "findings": _template_explanations(findings),
+        "explanation_mode": "template",
+        "template_reason": reason,
+    }
+
+
+def _template_explanations(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Build per-finding explanations from detector output, without calling a model."""
     explained = []
     for finding in findings:
         explained.append(
             {
                 **finding,
-                "llm_explanation": (
-                    f"{finding['title']}. Detector evidence: `{finding['evidence']}`. "
-                    f"Suggested fix: {finding['recommendation']}"
+                "explanation": (
+                    f"Why this matters: {finding['title'].rstrip('.')}. "
+                    f"The detector matched `{finding['evidence']}` at line {finding['line']}. "
+                    f"How to fix it: {finding['recommendation']}"
                 ),
-                "llm_mode": "mock",
             }
         )
     return explained
@@ -52,7 +65,7 @@ def explain_findings(
         return {
             "summary": "No detector findings. GuardScan will not invent vulnerabilities.",
             "findings": [],
-            "llm_mode": "none",
+            "explanation_mode": "none",
         }
 
     api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
@@ -60,15 +73,9 @@ def explain_findings(
         use_mock = not bool(api_key)
 
     if use_mock:
-        explained = _mock_explanations(findings)
-        return {
-            "summary": (
-                f"Mock explanation for {len(findings)} detector finding(s). "
-                "Set OPENROUTER_API_KEY for live grounded LLM explanations."
-            ),
-            "findings": explained,
-            "llm_mode": "mock",
-        }
+        return _template_result(
+            findings, "requested" if api_key else "no OPENROUTER_API_KEY set"
+        )
 
     payload_findings = [
         {
@@ -105,17 +112,29 @@ def explain_findings(
         "temperature": 0.1,
     }
 
-    with httpx.Client(timeout=60.0) as client:
-        response = client.post(OPENROUTER_URL, headers=headers, json=body)
-        response.raise_for_status()
-        data = response.json()
+    # Free-tier models rate-limit routinely, so any transport or payload failure
+    # degrades to template text instead of surfacing a traceback to the user.
+    try:
+        with httpx.Client(timeout=60.0) as client:
+            response = client.post(OPENROUTER_URL, headers=headers, json=body)
+            response.raise_for_status()
+            data = response.json()
+        content = data["choices"][0]["message"]["content"]
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        detail = "rate limited" if status == 429 else f"HTTP {status}"
+        return _template_result(findings, f"model call failed: {detail}")
+    except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as exc:
+        return _template_result(findings, f"model call failed: {type(exc).__name__}")
 
-    content = data["choices"][0]["message"]["content"]
-    explained = [{**f, "llm_explanation": content, "llm_mode": "openrouter"} for f in findings]
-    # Attach full narrative once; per-finding field points at shared grounded response.
+    if not content or not content.strip():
+        return _template_result(findings, "model returned an empty response")
+
+    # The model returns one narrative covering every finding, so it belongs in
+    # `summary` rather than duplicated onto each finding.
     return {
         "summary": content,
-        "findings": explained,
-        "llm_mode": "openrouter",
+        "findings": list(findings),
+        "explanation_mode": "ai",
         "model": body["model"],
     }

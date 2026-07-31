@@ -31,12 +31,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--no-explain",
         action="store_true",
-        help="Skip LLM / mock explanation layer",
+        help="Skip the explanation layer; report detector findings only",
     )
     parser.add_argument(
+        "--no-ai",
         "--mock-llm",
+        dest="mock_llm",
         action="store_true",
-        help="Force mock explanations even if OPENROUTER_API_KEY is set",
+        help="Explain findings from a fixed template instead of calling a model",
     )
     parser.add_argument(
         "--pretty",

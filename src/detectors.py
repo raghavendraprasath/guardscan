@@ -17,6 +17,35 @@ SENSITIVE_FUNCS = (
     "transferOwnership",
 )
 
+# Broader net than SENSITIVE_FUNCS: catches the same bug under a different name
+# (e.g. updateAdmin vs setOwner). Reported at High rather than Critical because
+# the name alone is weaker evidence than an exact match above.
+SENSITIVE_NAME_RE = re.compile(
+    r"^(set|update|change|upgrade|migrate|initiali[sz]e|withdraw|rescue|sweep|drain"
+    r"|mint|burn|pause|unpause|grant|revoke|renounce|kill|destroy|emergency|admin)",
+    re.IGNORECASE,
+)
+
+# An `onlyX` modifier, or an inline sender/role check in the body.
+GUARD_MODIFIER_RE = re.compile(r"\bonly[A-Z_]\w*\b|\bauth\b|\brestricted\b")
+GUARD_BODY_RE = re.compile(
+    r"require\s*\(\s*msg\.sender\s*==|"
+    r"if\s*\(\s*msg\.sender\s*!=|"
+    r"_check(?:Owner|Role)\s*\(|"
+    r"hasRole\s*\("
+)
+
+FUNCTION_RE = re.compile(r"function\s+(\w+)\s*\(([^)]*)\)\s*([^{;]*)\{")
+
+# block.* values an attacker or validator can influence.
+MANIPULABLE_RANDOM_RE = re.compile(r"blockhash\s*\(|block\.(prevrandao|difficulty)")
+# block.timestamp/number are legitimate for deadlines, so require a randomness hint.
+WEAK_RANDOM_RE = re.compile(r"block\.(timestamp|number)")
+RANDOM_HINT_RE = re.compile(
+    r"\b(seed|random|rand|winner|lottery|shuffle|draw|dice|roll)\b|keccak256|%",
+    re.IGNORECASE,
+)
+
 
 def _lines(source: str) -> list[str]:
     return source.splitlines()
@@ -32,6 +61,24 @@ def _snippet(source: str, index: int, width: int = 120) -> str:
     if line_end < 0:
         line_end = len(source)
     return source[line_start:line_end].strip()[:width]
+
+
+def _enclosing_function(source: str, index: int) -> re.Match[str] | None:
+    """Return the function header whose body contains `index`, if any."""
+    found = None
+    for match in FUNCTION_RE.finditer(source):
+        if match.start() > index:
+            break
+        found = match
+    return found
+
+
+def _is_guarded(source: str, header: re.Match[str] | None) -> bool:
+    if header is None:
+        return False
+    if GUARD_MODIFIER_RE.search(header.group(3)):
+        return True
+    return bool(GUARD_BODY_RE.search(source[header.end() : header.end() + 400]))
 
 
 def detect_tx_origin(source: str) -> list[Finding]:
@@ -64,14 +111,18 @@ def detect_missing_access_control(source: str) -> list[Finding]:
     for match in pattern.finditer(source):
         name = match.group(1)
         mods = match.group(3)
-        if name not in SENSITIVE_FUNCS:
+        exact = name in SENSITIVE_FUNCS
+        if not exact and not SENSITIVE_NAME_RE.match(name):
             continue
-        if re.search(r"\bonlyOwner\b|\bonlyRole\b", mods):
+        # A view/pure function cannot mutate state, so missing auth is not this bug.
+        if re.search(r"\b(view|pure)\b", mods):
             continue
-        # Look ahead a short window for require(msg.sender == owner)
+        if GUARD_MODIFIER_RE.search(mods):
+            continue
+        # Look ahead a short window for an inline sender/role check
         body_start = match.end()
         window = source[body_start : body_start + 400]
-        if re.search(r"require\s*\(\s*msg\.sender\s*==\s*owner", window):
+        if GUARD_BODY_RE.search(window):
             continue
         if name == "withdraw" and "balances[msg.sender]" in window:
             # user withdraw of own balance is OK for this heuristic
@@ -80,7 +131,7 @@ def detect_missing_access_control(source: str) -> list[Finding]:
             Finding(
                 id=f"missing-access-control-{name}",
                 detector="missing_access_control",
-                severity="Critical",
+                severity="Critical" if exact else "High",
                 title=f"Sensitive function `{name}` appears to lack access control",
                 line=_line_no(source, match.start()),
                 evidence=_snippet(source, match.start()),
@@ -178,12 +229,96 @@ def detect_unsafe_erc20(source: str) -> list[Finding]:
     return findings
 
 
+def detect_delegatecall(source: str) -> list[Finding]:
+    findings: list[Finding] = []
+    for match in re.finditer(r"\.delegatecall\s*\(", source):
+        evidence = _snippet(source, match.start())
+        if evidence.lstrip().startswith("//"):
+            continue
+        header = _enclosing_function(source, match.start())
+        guarded = _is_guarded(source, header)
+        findings.append(
+            Finding(
+                id=f"delegatecall-{_line_no(source, match.start())}",
+                detector="delegatecall",
+                severity="High" if guarded else "Critical",
+                title=(
+                    "`delegatecall` runs external code against this contract's storage"
+                    + ("" if guarded else " from an unrestricted function")
+                ),
+                line=_line_no(source, match.start()),
+                evidence=evidence,
+                recommendation=(
+                    "Restrict the target to a trusted immutable address and gate the caller; "
+                    "never delegatecall an address supplied by the caller."
+                ),
+            )
+        )
+    return findings
+
+
+def detect_unprotected_selfdestruct(source: str) -> list[Finding]:
+    findings: list[Finding] = []
+    for match in re.finditer(r"\bselfdestruct\s*\(", source):
+        evidence = _snippet(source, match.start())
+        if evidence.lstrip().startswith("//"):
+            continue
+        if _is_guarded(source, _enclosing_function(source, match.start())):
+            continue
+        findings.append(
+            Finding(
+                id=f"unprotected-selfdestruct-{_line_no(source, match.start())}",
+                detector="unprotected_selfdestruct",
+                severity="Critical",
+                title="`selfdestruct` reachable from an unrestricted function",
+                line=_line_no(source, match.start()),
+                evidence=evidence,
+                recommendation="Gate self-destruction behind an owner/role check, or remove it.",
+            )
+        )
+    return findings
+
+
+def detect_weak_randomness(source: str) -> list[Finding]:
+    findings: list[Finding] = []
+    seen_lines: set[int] = set()
+    for pattern, needs_hint in ((MANIPULABLE_RANDOM_RE, False), (WEAK_RANDOM_RE, True)):
+        for match in pattern.finditer(source):
+            line_no = _line_no(source, match.start())
+            if line_no in seen_lines:
+                continue
+            evidence = _snippet(source, match.start())
+            if evidence.lstrip().startswith("//"):
+                continue
+            if needs_hint and not RANDOM_HINT_RE.search(evidence):
+                continue
+            seen_lines.add(line_no)
+            findings.append(
+                Finding(
+                    id=f"weak-randomness-{line_no}",
+                    detector="weak_randomness",
+                    severity="High",
+                    title="Randomness derived from block data is manipulable",
+                    line=line_no,
+                    evidence=evidence,
+                    recommendation=(
+                        "Block values are influenced by validators and visible to callers; "
+                        "use a commit-reveal scheme or a VRF oracle instead."
+                    ),
+                )
+            )
+    return findings
+
+
 DETECTORS = (
     detect_missing_access_control,
     detect_reentrancy,
     detect_swap_no_slippage,
     detect_unsafe_erc20,
     detect_tx_origin,
+    detect_delegatecall,
+    detect_unprotected_selfdestruct,
+    detect_weak_randomness,
 )
 
 
