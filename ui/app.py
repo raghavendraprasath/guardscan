@@ -26,13 +26,20 @@ st.caption(
     "The LLM explains only detector findings — it does not invent new issues."
 )
 
-example = st.selectbox(
-    "Load fixture (optional)",
-    ["(none)", "VulnerableVault.sol", "VulnerableAMM.sol", "SaferAMM.sol"],
+EXAMPLE_CONTRACTS: dict[str, str | None] = {
+    "Paste my own code": None,
+    "Vulnerable vault — unsafe withdrawals & ownership": "VulnerableVault.sol",
+    "Vulnerable AMM — unsafe token swap": "VulnerableAMM.sol",
+    "Hardened AMM — same swap, issues fixed": "SaferAMM.sol",
+}
+
+choice = st.selectbox(
+    "Start from an example contract",
+    list(EXAMPLE_CONTRACTS),
+    help="Loads a sample Solidity contract below. Choose 'Paste my own code' to scan your own.",
 )
-initial = ""
-if example != "(none)":
-    initial = (FIXTURES / example).read_text(encoding="utf-8")
+example = EXAMPLE_CONTRACTS[choice]
+initial = (FIXTURES / example).read_text(encoding="utf-8") if example else ""
 
 source = st.text_area("Solidity source", value=initial, height=360)
 col1, col2 = st.columns(2)
@@ -43,11 +50,11 @@ with col2:
 
 if st.button("Scan", type="primary"):
     if not source.strip():
-        st.warning("Paste Solidity source or load a fixture.")
+        st.warning("Paste Solidity source or pick an example contract.")
     else:
         report = scan_source(
             source,
-            file_label=example if example != "(none)" else "<paste>",
+            file_label=example or "<pasted source>",
             explain=explain,
             use_mock_llm=True if mock_llm else None,
         )
