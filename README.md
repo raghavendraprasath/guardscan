@@ -2,6 +2,10 @@
 
 **AI-Assisted Smart Contract Vulnerability Scanner**
 
+<p align="center">
+  <img src="docs/screenshots/scanner-home.jpg" alt="GuardScan web UI" width="920" />
+</p>
+
 GuardScan pairs deterministic Solidity detectors with grounded LLM explanations to detect, rank, explain, and suggest fixes for smart-contract security issues — without free-form hallucination.
 
 | Field | Detail |
@@ -22,6 +26,18 @@ This repository is the home of **GuardScan**, an AI-assisted smart contract vuln
 2. **A grounded LLM explanation layer** that ranks severity, explains risk in plain English, and suggests fixes — constrained to detector evidence only
 
 GuardScan targets the practical gap between noisy expert static-analysis output and untrusted free-form “AI audit chatbots.” The initial scope focuses on patterns relevant to AMM / ERC-20 style contracts, building on prior coursework (`SimpleAMM` and LLM Text-to-SQL tooling).
+
+### Screenshots
+
+| Vulnerable vault (4 findings) | Hardened AMM (0 findings) |
+|---|---|
+| <img src="docs/screenshots/vault-findings.jpg" alt="Vulnerable vault scan with Critical and High findings" /> | <img src="docs/screenshots/hardened-amm-clean.jpg" alt="Hardened AMM scan with zero findings and honest scope message" /> |
+
+<p align="center">
+  <img src="docs/screenshots/amm-findings.jpg" alt="Vulnerable AMM scan showing 8 findings and severity chart" width="900" />
+</p>
+
+<p align="center"><em>Vulnerable AMM — access control, slippage, and unsafe ERC-20 patterns with a severity breakdown. Detectors decide; the model only explains.</em></p>
 
 ---
 
@@ -247,6 +263,7 @@ A usable local or web-accessible system that:
 ```text
 guardscan/
   README.md                 # proposal + final delivery + usage
+  docs/screenshots/         # UI screenshots for the README
   web/                      # Next.js UI (Vercel deploy target)
   fixtures/                 # vulnerable + safer Solidity demo samples
   eval/                     # labeled evaluation suite + metrics runner
