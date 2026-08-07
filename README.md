@@ -17,6 +17,15 @@ GuardScan pairs deterministic Solidity detectors with grounded LLM explanations 
 | **Live demo** | [guardscan.vercel.app](https://guardscan.vercel.app) |
 | **Repository** | [github.com/raghavendraprasath/guardscan](https://github.com/raghavendraprasath/guardscan) |
 
+### Quick start
+
+1. Open **[guardscan.vercel.app](https://guardscan.vercel.app)**
+2. Select **Vulnerable vault** → click **Scan** (AI off is fine) → expect **4** findings
+3. Select **Hardened AMM** → **Scan** → expect **0** findings (not a safety claim — see limitations)
+4. Optionally turn **Explain findings with AI** on and scan again — findings stay the same; only the prose is added
+
+Local Python CLI and Next.js setup are in [§11](#11-usage--final-system).
+
 ---
 
 ## 1. Summary
@@ -90,7 +99,7 @@ Manual audits remain valuable, but they are slow, expensive, and difficult to ru
 1. **Real economic impact.** DeFi and token contracts secure substantial value. Historical exploits show that small coding mistakes can become catastrophic losses.
 2. **Applied security skill.** Turning Solidity, AMM, and EVM security concepts into a working tool demonstrates applied mastery beyond conceptual understanding.
 3. **Trustworthy AI for risk workflows.** AI is increasingly used in risk, compliance, and security contexts. The hard engineering problem is trustworthiness: reduce hallucination, cite evidence, and rank severity.
-4. **Portfolio relevance.** The project extends experience in Python, LLMs, evaluation/guardrails, and risk-oriented systems into blockchain security tooling — a strong intersection for AI engineering, fintech, and security-adjacent roles.
+4. **Portfolio relevance.** The project spans Python detectors/evaluation, TypeScript/Next.js UI on Vercel, LLM guardrails, and risk-oriented systems — a strong intersection for AI engineering, fintech, and security-adjacent roles.
 
 ---
 
@@ -126,14 +135,15 @@ Most mature tools optimize for expert auditors. GuardScan optimizes for a **deve
 ### 6.2 System architecture
 
 ```text
-Solidity source
+Solidity source (paste or fixture)
     |
-    |-- Deterministic detectors (heuristics / optional Slither JSON)
-    |-- Finding schema (id, severity, lines, evidence)
-    `-- LLM explainer (OpenRouter)
+    |-- Deterministic detectors (8 heuristic rules; Python CLI + TypeScript web)
+    |-- Finding schema (id, severity, line, evidence, recommendation)
+    `-- Grounded explainer (OpenRouter)
             |   explain + suggest fix ONLY for listed findings
+            |   template fallback if the model is unreachable
             v
-     CLI + simple Web UI report
+     Python CLI (JSON)  |  Next.js UI (web/, Vercel)  |  optional Streamlit
 ```
 
 ### 6.3 Core capabilities
@@ -165,7 +175,7 @@ Solidity source
 | Prior work | Reuse in GuardScan |
 |---|---|
 | [SimpleAMM](https://github.com/raghavendraprasath/automated-market-maker) (Solidity, Hardhat, tests/coverage) | Primary scan target + vulnerable variants |
-| [Block Explorer AI / Text-to-SQL](https://github.com/raghavendraprasath/ai-generated-block-explorer) (OpenRouter, prompt constraints, Streamlit) | Prompt design, API wiring, UI/CLI delivery |
+| [Block Explorer AI / Text-to-SQL](https://github.com/raghavendraprasath/ai-generated-block-explorer) (OpenRouter, prompt constraints) | Prompt design, API wiring, grounded-explanation guardrails |
 | Course security topics (reentrancy, access control) | Detector categories and evaluation fixtures |
 
 ---
@@ -210,7 +220,7 @@ Demonstrate an end-to-end working path quickly, even if analysis depth is intent
 | Expand detectors | 5 → 8: added `delegatecall`, unprotected `selfdestruct`, block-derived randomness |
 | Harden finding schema | Explanations carry `explanation_mode` (`ai` / `template` / `none`) plus `template_reason`, so the provenance of every sentence is machine-readable |
 | Document false-positive notes | Access control widened from 9 hardcoded names to name prefixes, reported at `High` instead of `Critical` to reflect weaker evidence; `onlyX` modifiers, inline `msg.sender` checks, and `view`/`pure` functions suppressed as guards |
-| Live scan demo | CLI and Streamlit both run end-to-end; explanations degrade to template text on rate limit or network loss instead of failing |
+| Live scan demo | End-to-end CLI + Streamlit demo (later replaced by Next.js on Vercel for final delivery) |
 | Regression coverage | 6 tests, including a control asserting a well-guarded contract yields zero findings |
 
 ### Delivered as of Aug 7 (final delivery)
@@ -221,8 +231,8 @@ Demonstrate an end-to-end working path quickly, even if analysis depth is intent
 | Focused detector set | 8 deterministic detectors covering access control, reentrancy, slippage, unsafe ERC-20, `tx.origin`, `delegatecall`, unprotected `selfdestruct`, weak randomness |
 | Grounded LLM explanations | OpenRouter (free-tier model); detectors remain source of truth; model cannot invent findings |
 | Small labeled evaluation suite | `eval/` — 13 labeled cases, detector-level precision / recall / F1, one documented known false negative |
-| Related work + limitations | README §§5 and 11.6; `fixtures/README.md` maps planted bugs to public references |
-| Final presentation | Local outline + timed script PDFs for class (kept outside the repo) |
+| Related work + limitations | README §§5 and 11.9; `fixtures/README.md` maps planted bugs to public references |
+| Final presentation | Class demo on the live Vercel app; timed speaking script kept locally |
 | Optional: Slither JSON ingest | Explicitly deferred — heuristics kept as the mock for heavy analysis (proposal §6.4) |
 
 ### Intended weekly accomplishments
@@ -239,7 +249,7 @@ Demonstrate an end-to-end working path quickly, even if analysis depth is intent
 |---|---|
 | LLM hallucinated vulnerabilities | Detectors are the source of truth; LLM explains only listed findings |
 | Scope creep into a full audit platform | Cap detector count; mock heavy analysis components |
-| Workload collision with Web3 UI homework | Keep final project on Python/LLM track; isolate Web3 UI as a separate deliverable |
+| Workload collision with Web3 UI homework | Keep final project on detectors + grounded LLM track; isolate Web3 UI as a separate deliverable |
 | Limited novelty versus existing tools | Emphasize grounded explanation UX, AMM-focused checks, and honest evaluation |
 
 ---
@@ -257,7 +267,7 @@ A usable local or web-accessible system that:
 
 ---
 
-## 11. Prototype Usage (≤5-Hour MVP)
+## 11. Usage & Final System
 
 ### 11.1 Layout
 
