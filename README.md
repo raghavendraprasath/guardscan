@@ -9,7 +9,7 @@ GuardScan pairs deterministic Solidity detectors with grounded LLM explanations 
 | **Author** | Raghavendra Prasath Sridhar |
 | **Course** | INFO7500 — Cryptocurrency and Smart Contracts (Summer 2026) |
 | **Area** | Blockchain Security |
-| **Status** | **Final delivery (Aug 2026)** — usable GuardScan system: 8 detectors, CLI + Streamlit UI, grounded AI explanations, labeled evaluation suite (P=1.0 / R=1.0 on 13 cases), honest limitations |
+| **Status** | **Final delivery (Aug 2026)** — usable GuardScan system: 8 detectors, Next.js web UI (Vercel), Python CLI + eval suite (P=1.0 / R=1.0), grounded AI explanations, honest limitations |
 | **Repository** | [github.com/raghavendraprasath/guardscan](https://github.com/raghavendraprasath/guardscan) |
 
 ---
@@ -200,7 +200,7 @@ Demonstrate an end-to-end working path quickly, even if analysis depth is intent
 
 | Proposal / DoD commitment | Status |
 |---|---|
-| Usable CLI + UI | `cli.py` + Streamlit `ui/app.py` with AI toggle and automatic template fallback |
+| Usable CLI + UI | Python `cli.py` + Next.js `web/` (Vercel) with AI toggle and automatic template fallback; Streamlit kept as optional legacy |
 | Focused detector set | 8 deterministic detectors covering access control, reentrancy, slippage, unsafe ERC-20, `tx.origin`, `delegatecall`, unprotected `selfdestruct`, weak randomness |
 | Grounded LLM explanations | OpenRouter (free-tier model); detectors remain source of truth; model cannot invent findings |
 | Small labeled evaluation suite | `eval/` — 13 labeled cases, detector-level precision / recall / F1, one documented known false negative |
@@ -247,10 +247,11 @@ A usable local or web-accessible system that:
 ```text
 guardscan/
   README.md                 # proposal + final delivery + usage
+  web/                      # Next.js UI (Vercel deploy target)
   fixtures/                 # vulnerable + safer Solidity demo samples
   eval/                     # labeled evaluation suite + metrics runner
-  src/                      # detectors, finding schema, LLM explainer, scanner
-  ui/app.py                 # Streamlit report surface
+  src/                      # Python detectors, finding schema, LLM explainer, scanner
+  ui/app.py                 # Optional Streamlit surface (legacy)
   tests/                    # detector + eval-suite tests
   cli.py                    # JSON CLI entrypoint
   requirements.txt
@@ -291,29 +292,36 @@ Each report carries an `explanation.explanation_mode` of `ai`, `template`, or `n
 provenance of every explanation is explicit in the JSON. When the mode is `template`,
 `explanation.template_reason` records why the model was not used.
 
-### 11.4 Streamlit UI
+### 11.4 Web UI (Next.js — primary)
+
+```bash
+cd web
+copy .env.example .env.local   # or: cp .env.example .env.local
+# set OPENROUTER_API_KEY in .env.local for live AI explanations
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). Detectors run in the browser (instant /
+offline). AI explanations call `/api/scan` on the server so the API key never ships to the client.
+
+Stack: Next.js App Router, React 19, TypeScript, Tailwind CSS v4, Geist fonts, Recharts.
+
+### 11.5 Streamlit UI (optional / legacy)
 
 ```bash
 streamlit run ui/app.py
 ```
 
-Paste Solidity or pick an example contract, then click **Scan**. The UI offers one control,
-**Explain findings with AI**:
+Still available for local demos. The polished public surface is the Next.js app above.
 
-- **On** — findings go to the model, which writes risk and fix guidance for each one.
-- **Off** — the same detector findings with no explanation layer, which demonstrates that the
-  detectors, not the model, are what produce findings.
-
-If the model cannot be reached (missing key, rate limit, no network), the explanation degrades to
-built-in template text and says so, rather than failing the scan.
-
-### 11.5 Tests
+### 11.6 Tests
 
 ```bash
 pytest -q
 ```
 
-### 11.6 Labeled evaluation suite
+### 11.7 Labeled evaluation suite
 
 ```bash
 python eval/run_eval.py
@@ -327,7 +335,32 @@ See [`eval/README.md`](eval/README.md) for the case table and how to interpret t
 Latest measured result on this suite: **precision 1.0 / recall 1.0 / F1 1.0**, with **1 known
 false negative** (`configureParameters` ownership change — outside name heuristics).
 
-### 11.7 Prototype limitations (intentional)
+### 11.8 Deploy on Vercel
+
+The Next.js app in `web/` is the Vercel deployment target.
+
+1. Push this repository to GitHub
+2. Import the repo at [vercel.com/new](https://vercel.com/new)
+3. Set **Root Directory** to `web`
+4. Add environment variables:
+   - `OPENROUTER_API_KEY` = your OpenRouter key
+   - `OPENROUTER_MODEL` = `nvidia/nemotron-3-super-120b-a12b:free` (optional)
+5. Deploy
+
+Public URL will look like `https://guardscan-….vercel.app`.
+
+Detectors always work without a key. Without `OPENROUTER_API_KEY`, AI explanations fall back to
+template text.
+
+CLI alternative:
+
+```bash
+cd web
+npx vercel
+npx vercel --prod
+```
+
+### 11.9 Prototype limitations (intentional)
 
 - Heuristic detectors (not full Slither / symbolic execution)
 - Source-first only (no bytecode-only scanning)
@@ -341,7 +374,7 @@ false negative** (`configureParameters` ownership change — outside name heuris
   called something unlike the patterns above can be missed (measured in `eval/` as a
   known false negative).
 
-### 11.8 Future work
+### 11.10 Future work
 
 - Expand the labeled set beyond educational fixtures toward public vulnerability corpora
 - Optional Slither JSON ingest as a second detector backend (mocked in the MVP)

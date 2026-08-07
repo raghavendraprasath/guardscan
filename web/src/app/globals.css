@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #10151c;
+  --ink-soft: #1a2330;
+  --paper: #f3efe6;
+  --paper-2: #e8e2d4;
+  --mist: #c9d6c4;
+  --signal: #0f766e;
+  --signal-bright: #14b8a6;
+  --alert: #c2410c;
+  --warn: #b45309;
+  --ok: #3f6212;
+  --line: color-mix(in oklab, var(--ink) 12%, transparent);
+  --glow: color-mix(in oklab, var(--signal) 18%, transparent);
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-mist: var(--mist);
+  --color-signal: var(--signal);
+  --color-signal-bright: var(--signal-bright);
+  --color-alert: var(--alert);
+  --color-warn: var(--warn);
+  --color-ok: var(--ok);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 600px at 8% -10%, rgba(20, 184, 166, 0.18), transparent 55%),
+    radial-gradient(900px 500px at 92% 0%, rgba(201, 214, 196, 0.55), transparent 50%),
+    linear-gradient(165deg, #f7f3ea 0%, #ebe4d4 48%, #dfe8df 100%);
+  background-attachment: fixed;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at center, black 35%, transparent 80%);
+}
+
+::selection {
+  background: color-mix(in oklab, var(--signal-bright) 45%, white);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-scan {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(15, 118, 110, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(15, 118, 110, 0);
+  }
+}
+
+.animate-rise {
+  animation: rise 0.55s ease-out both;
+}
+
+.animate-rise-delay {
+  animation: rise 0.65s ease-out 0.08s both;
+}
+
+.animate-rise-late {
+  animation: rise 0.7s ease-out 0.16s both;
+}
+
+.scan-pulse {
+  animation: pulse-scan 1.6s ease-out infinite;
+}

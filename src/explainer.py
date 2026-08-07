@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-DEFAULT_MODEL = "openai/gpt-4o-mini"
+DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
 
 SYSTEM_PROMPT = """You are GuardScan's grounded explanation layer for smart-contract findings.
 

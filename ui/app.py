@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -16,7 +17,16 @@ if str(ROOT) not in sys.path:
 from src.detectors import DETECTORS  # noqa: E402
 from src.scanner import scan_source  # noqa: E402
 
+# Local .env first; Streamlit Cloud secrets override when present.
 load_dotenv()
+try:
+    for key in ("OPENROUTER_API_KEY", "OPENROUTER_MODEL"):
+        value = st.secrets.get(key, "")
+        if value and str(value).strip():
+            os.environ[key] = str(value).strip()
+except Exception:
+    # No secrets.toml / not running under Streamlit secrets — fine for CLI-local use.
+    pass
 
 FIXTURES = ROOT / "fixtures"
 DETECTOR_COUNT = len(DETECTORS)
