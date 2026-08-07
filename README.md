@@ -13,7 +13,8 @@ GuardScan pairs deterministic Solidity detectors with grounded LLM explanations 
 | **Author** | Raghavendra Prasath Sridhar |
 | **Course** | INFO7500 — Cryptocurrency and Smart Contracts (Summer 2026) |
 | **Area** | Blockchain Security |
-| **Status** | **Final delivery (Aug 2026)** — usable GuardScan system: 8 detectors, Next.js web UI (Vercel), Python CLI + eval suite (P=1.0 / R=1.0), grounded AI explanations, honest limitations |
+| **Status** | **Final delivery (Aug 2026)** — usable GuardScan system: 8 detectors, Next.js web UI, Python CLI + eval suite (P=1.0 / R=1.0), grounded AI explanations, honest limitations |
+| **Live demo** | [guardscan.vercel.app](https://guardscan.vercel.app) |
 | **Repository** | [github.com/raghavendraprasath/guardscan](https://github.com/raghavendraprasath/guardscan) |
 
 ---
@@ -364,7 +365,7 @@ The Next.js app in `web/` is the Vercel deployment target.
    - `OPENROUTER_MODEL` = `nvidia/nemotron-3-super-120b-a12b:free` (optional)
 5. Deploy
 
-Public URL will look like `https://guardscan-….vercel.app`.
+Public URL: [https://guardscan.vercel.app](https://guardscan.vercel.app)
 
 Detectors always work without a key. Without `OPENROUTER_API_KEY`, AI explanations fall back to
 template text.
