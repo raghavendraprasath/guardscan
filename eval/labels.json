@@ -1,0 +1,98 @@
+{
+  "description": "Small labeled evaluation set for GuardScan detectors. Labels are detector-level: expected_detectors must fire; any other detector finding counts as a false positive for that case.",
+  "metric_notes": "Precision/recall are computed at the (file, detector) level. This is an educational suite, not a published benchmark.",
+  "cases": [
+    {
+      "id": "bad-reentrancy",
+      "path": "contracts/BadReentrancy.sol",
+      "role": "true_positive",
+      "expected_detectors": ["reentrancy"],
+      "notes": "Classic CEI violation: external call before balances[msg.sender] = 0."
+    },
+    {
+      "id": "bad-access-control",
+      "path": "contracts/BadAccessControl.sol",
+      "role": "true_positive",
+      "expected_detectors": ["missing_access_control"],
+      "notes": "Unguarded setOwner."
+    },
+    {
+      "id": "bad-tx-origin",
+      "path": "contracts/BadTxOrigin.sol",
+      "role": "true_positive",
+      "expected_detectors": ["tx_origin", "missing_access_control"],
+      "notes": "tx.origin auth; privilegedWithdraw also lacks a msg.sender guard."
+    },
+    {
+      "id": "bad-swap-no-slippage",
+      "path": "contracts/BadSwapNoSlippage.sol",
+      "role": "true_positive",
+      "expected_detectors": ["swap_slippage", "unsafe_erc20"],
+      "notes": "No minOut parameter; unchecked ERC-20 transfer/transferFrom."
+    },
+    {
+      "id": "bad-unsafe-erc20",
+      "path": "contracts/BadUnsafeErc20.sol",
+      "role": "true_positive",
+      "expected_detectors": ["unsafe_erc20"],
+      "notes": "Infinite approve + unchecked transfer."
+    },
+    {
+      "id": "bad-delegatecall",
+      "path": "contracts/BadDelegatecall.sol",
+      "role": "true_positive",
+      "expected_detectors": ["delegatecall"],
+      "notes": "Caller-chosen delegatecall target."
+    },
+    {
+      "id": "bad-selfdestruct",
+      "path": "contracts/BadSelfdestruct.sol",
+      "role": "true_positive",
+      "expected_detectors": ["unprotected_selfdestruct"],
+      "notes": "selfdestruct with no authorization."
+    },
+    {
+      "id": "bad-weak-randomness",
+      "path": "contracts/BadWeakRandomness.sol",
+      "role": "true_positive",
+      "expected_detectors": ["weak_randomness"],
+      "notes": "Lottery seed from blockhash."
+    },
+    {
+      "id": "good-guarded-admin",
+      "path": "contracts/GoodGuardedAdmin.sol",
+      "role": "true_negative",
+      "expected_detectors": [],
+      "notes": "onlyAdmin / msg.sender guards; timestamp used as deadline only."
+    },
+    {
+      "id": "fixture-safer-amm",
+      "path": "../fixtures/SaferAMM.sol",
+      "role": "true_negative",
+      "expected_detectors": [],
+      "notes": "Hardened AMM contrast fixture from the demo set."
+    },
+    {
+      "id": "fixture-vulnerable-vault",
+      "path": "../fixtures/VulnerableVault.sol",
+      "role": "true_positive",
+      "expected_detectors": ["missing_access_control", "reentrancy", "tx_origin"],
+      "notes": "Primary demo fixture."
+    },
+    {
+      "id": "fixture-vulnerable-amm",
+      "path": "../fixtures/VulnerableAMM.sol",
+      "role": "true_positive",
+      "expected_detectors": ["missing_access_control", "swap_slippage", "unsafe_erc20"],
+      "notes": "Primary AMM demo fixture."
+    },
+    {
+      "id": "known-miss-odd-name",
+      "path": "contracts/KnownMissOddName.sol",
+      "role": "known_false_negative",
+      "expected_detectors": [],
+      "planted_but_undetected": ["missing_access_control"],
+      "notes": "Real unguarded ownership change under configureParameters — outside name heuristics. Documents a measured false negative."
+    }
+  ]
+}

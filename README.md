@@ -9,7 +9,7 @@ GuardScan pairs deterministic Solidity detectors with grounded LLM explanations 
 | **Author** | Raghavendra Prasath Sridhar |
 | **Course** | INFO7500 — Cryptocurrency and Smart Contracts (Summer 2026) |
 | **Area** | Blockchain Security |
-| **Status** | Jul 31 progress update — working prototype: 8 detectors, CLI + Streamlit UI, grounded AI explanations |
+| **Status** | **Final delivery (Aug 2026)** — usable GuardScan system: 8 detectors, CLI + Streamlit UI, grounded AI explanations, labeled evaluation suite (P=1.0 / R=1.0 on 13 cases), honest limitations |
 | **Repository** | [github.com/raghavendraprasath/guardscan](https://github.com/raghavendraprasath/guardscan) |
 
 ---
@@ -196,6 +196,18 @@ Demonstrate an end-to-end working path quickly, even if analysis depth is intent
 | Live scan demo | CLI and Streamlit both run end-to-end; explanations degrade to template text on rate limit or network loss instead of failing |
 | Regression coverage | 6 tests, including a control asserting a well-guarded contract yields zero findings |
 
+### Delivered as of Aug 7 (final delivery)
+
+| Proposal / DoD commitment | Status |
+|---|---|
+| Usable CLI + UI | `cli.py` + Streamlit `ui/app.py` with AI toggle and automatic template fallback |
+| Focused detector set | 8 deterministic detectors covering access control, reentrancy, slippage, unsafe ERC-20, `tx.origin`, `delegatecall`, unprotected `selfdestruct`, weak randomness |
+| Grounded LLM explanations | OpenRouter (free-tier model); detectors remain source of truth; model cannot invent findings |
+| Small labeled evaluation suite | `eval/` — 13 labeled cases, detector-level precision / recall / F1, one documented known false negative |
+| Related work + limitations | README §§5 and 11.6; `fixtures/README.md` maps planted bugs to public references |
+| Final presentation | Local outline + timed script PDFs for class (kept outside the repo) |
+| Optional: Slither JSON ingest | Explicitly deferred — heuristics kept as the mock for heavy analysis (proposal §6.4) |
+
 ### Intended weekly accomplishments
 
 1. **Proposal week:** Publish proposal; complete ≤5-hour mocked MVP; demo fixtures → findings → grounded LLM explanation
@@ -219,11 +231,12 @@ Demonstrate an end-to-end working path quickly, even if analysis depth is intent
 
 A usable local or web-accessible system that:
 
-1. Scans Solidity source for a focused vulnerability set
-2. Returns severity-ranked, human-readable reports via a grounded LLM
-3. Demonstrates clear results on AMM-style contracts
-4. Documents related work, limitations, and future work honestly
-5. Supports weekly progress updates and a final presentation
+1. Scans Solidity source for a focused vulnerability set — **done** (8 detectors)
+2. Returns severity-ranked, human-readable reports via a grounded LLM — **done**
+3. Demonstrates clear results on AMM-style contracts — **done** (`VulnerableAMM` / `SaferAMM`)
+4. Documents related work, limitations, and future work honestly — **done**
+5. Supports weekly progress updates and a final presentation — **done**
+6. Includes a small labeled evaluation suite with measurable precision/recall — **done** (`eval/`)
 
 ---
 
@@ -233,11 +246,12 @@ A usable local or web-accessible system that:
 
 ```text
 guardscan/
-  README.md                 # proposal + usage (this file)
-  fixtures/                 # vulnerable + safer Solidity samples
+  README.md                 # proposal + final delivery + usage
+  fixtures/                 # vulnerable + safer Solidity demo samples
+  eval/                     # labeled evaluation suite + metrics runner
   src/                      # detectors, finding schema, LLM explainer, scanner
   ui/app.py                 # Streamlit report surface
-  tests/                    # detector tests
+  tests/                    # detector + eval-suite tests
   cli.py                    # JSON CLI entrypoint
   requirements.txt
   .env.example
@@ -299,7 +313,21 @@ built-in template text and says so, rather than failing the scan.
 pytest -q
 ```
 
-### 11.6 Prototype limitations (intentional)
+### 11.6 Labeled evaluation suite
+
+```bash
+python eval/run_eval.py
+python eval/run_eval.py --fail-on-mismatch
+```
+
+The suite in `eval/` contains 13 hand-labeled cases (true positives, true negatives, and one
+documented known false negative). Metrics are detector-level precision, recall, and F1.
+See [`eval/README.md`](eval/README.md) for the case table and how to interpret the numbers.
+
+Latest measured result on this suite: **precision 1.0 / recall 1.0 / F1 1.0**, with **1 known
+false negative** (`configureParameters` ownership change — outside name heuristics).
+
+### 11.7 Prototype limitations (intentional)
 
 - Heuristic detectors (not full Slither / symbolic execution)
 - Source-first only (no bytecode-only scanning)
@@ -310,7 +338,16 @@ pytest -q
   oracle manipulation, gas griefing, upgrade-storage collisions, and many more) are
   never examined, so a clean report means "none of these 8 patterns matched" and
   nothing stronger. Detectors are also name- and shape-sensitive: an unguarded setter
-  called something unlike the patterns above can be missed.
+  called something unlike the patterns above can be missed (measured in `eval/` as a
+  known false negative).
+
+### 11.8 Future work
+
+- Expand the labeled set beyond educational fixtures toward public vulnerability corpora
+- Optional Slither JSON ingest as a second detector backend (mocked in the MVP)
+- Richer severity ranking that combines detector confidence with LLM-assisted prioritization
+  (still grounded — no new findings)
+- Bytecode / compiled-artifact scanning for contracts without source
 
 ---
 
